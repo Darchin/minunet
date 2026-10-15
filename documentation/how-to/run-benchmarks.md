@@ -1,6 +1,28 @@
 # Run Benchmarks
 
-This guide covers the built-in nnU-Net benchmark trainers.
+This guide covers the custom CUDA benchmark tool and the built-in nnU-Net benchmark trainers.
+
+## Dummy-tensor CUDA benchmark
+
+Use the custom `benchmark` command to measure a configuration without loading training data:
+
+```bash
+uv run benchmark -d 1 -p MobileUNetPlans -c mn-2x-t
+uv run benchmark -d 1 -p MobileUNetPlans -c mn-2x-t --inference
+```
+
+The integer dataset ID (`-d`/`--dataset`) is required. Plan identifiers resolve within that
+dataset's directory under `nnUNet_preprocessed`. A direct plans JSON path is also accepted
+with `-p`; it must have a `dataset.json` beside it.
+
+By default, the model runs in training mode with FP16 autocast, DiceCE loss and backward
+passes. The report includes peak memory, forward time (including loss), backward time and
+total time. With `-i`/`--inference`, the model runs in eval mode under `torch.inference_mode`
+with deep supervision disabled, and reports only peak forward memory and forward time.
+Inference does not create targets, calculate loss or run backward passes.
+
+Compilation uses `mode="reduce-overhead"` by default; disable it with `-dc`/`--disable-compilation`.
+Use `-nw`/`--num-warmup` and `-nr`/`--num-repeats` to change the warm-up and measurement counts.
 
 ## What the benchmark measures
 

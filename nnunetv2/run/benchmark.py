@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import gc
-import glob
 import os
 import sys
 from os.path import abspath, dirname, isfile, join
@@ -28,6 +27,7 @@ from nnunetv2.training.loss.compound_losses import DC_and_CE_loss
 from nnunetv2.training.loss.deep_supervision import DeepSupervisionWrapper
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
+from nnunetv2.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
 from nnunetv2.utilities.label_handling.label_handling import (
     determine_num_input_channels,
 )
@@ -55,47 +55,19 @@ def _clear_cuda_after_oom() -> None:
         torch.cuda.ipc_collect()
 
 
-def _matching_plan_files(plans_identifier: str, configuration: str) -> list[str]:
-    if not nnUNet_preprocessed.is_set():
-        raise RuntimeError(
-            "nnUNet_preprocessed is not set. Pass a plans JSON path with -p/--plan or set nnUNet_preprocessed "
-            "so the benchmark can discover plans by identifier."
-        )
-
-    candidates = sorted(
-        glob.glob(join(nnUNet_preprocessed.require(), "*", plans_identifier + ".json"))
-    )
-    matches = []
-    for candidate in candidates:
-        try:
-            plans = load_json(candidate)
-        except Exception:
-            continue
-        if configuration in plans.get("configurations", {}):
-            matches.append(candidate)
-    return matches
-
-
-def resolve_plans_file(plans: str, configuration: str) -> str:
+def resolve_plans_file(plans: str, dataset: int) -> str:
     if isfile(plans):
         return abspath(plans)
 
     if plans.endswith(".json") or os.sep in plans:
         raise FileNotFoundError(f"Plans file does not exist: {plans}")
 
-    matches = _matching_plan_files(plans, configuration)
-    if not matches:
-        raise FileNotFoundError(
-            f"Could not find a {plans}.json file containing configuration '{configuration}' under "
-            f"nnUNet_preprocessed={nnUNet_preprocessed.get()!r}."
-        )
-    if len(matches) > 1:
-        formatted = "\n".join(f"  - {i}" for i in matches)
-        raise RuntimeError(
-            f"Configuration '{configuration}' with plans identifier '{plans}' is ambiguous. "
-            f"Pass one of these files directly via -p/--plan:\n{formatted}"
-        )
-    return matches[0]
+    preprocessed = nnUNet_preprocessed.require()
+    dataset_name = maybe_convert_to_dataset_name(dataset)
+    plans_file = join(preprocessed, dataset_name, plans + ".json")
+    if not isfile(plans_file):
+        raise FileNotFoundError(f"Plans file does not exist for dataset {dataset}: {plans_file}")
+    return abspath(plans_file)
 
 
 def load_dataset_json_for_plans(plans_file: str) -> dict:
@@ -170,12 +142,16 @@ def make_targets_like(
 
 def run_step(
     network: torch.nn.Module,
-    loss_fn: torch.nn.Module,
+    loss_fn: torch.nn.Module | None,
     data: torch.Tensor,
-    target: torch.Tensor | list[torch.Tensor],
+    target: torch.Tensor | list[torch.Tensor] | None,
     grad_scaler: GradScaler | None,
     measure: bool,
+    inference: bool = False,
 ) -> tuple[float, float, float]:
+    if inference:
+        return run_inference_step(network, data, measure)
+
     network.zero_grad(set_to_none=True)
 
     if not measure:
@@ -216,6 +192,33 @@ def run_step(
     return peak_memory, forward_time, backward_time
 
 
+@torch.inference_mode()
+def run_inference_step(
+    network: torch.nn.Module, data: torch.Tensor, measure: bool
+) -> tuple[float, float, float]:
+    if not measure:
+        with autocast("cuda", enabled=True):
+            network(data)
+        torch.cuda.synchronize()
+        return 0.0, 0.0, 0.0
+
+    torch.cuda.reset_peak_memory_stats()
+    torch.cuda.synchronize()
+    forward_start = torch.cuda.Event(enable_timing=True)
+    forward_end = torch.cuda.Event(enable_timing=True)
+
+    forward_start.record()
+    with autocast("cuda", enabled=True):
+        output = network(data)
+    forward_end.record()
+    torch.cuda.synchronize()
+
+    forward_time = forward_start.elapsed_time(forward_end)
+    peak_memory = torch.cuda.max_memory_allocated() / 1024**3
+    del output
+    return peak_memory, forward_time, 0.0
+
+
 def format_mean_std(values: list[float], precision: int = 3) -> str:
     value_mean = mean(values)
     value_std = stdev(values) if len(values) > 1 else 0.0
@@ -223,15 +226,23 @@ def format_mean_std(values: list[float], precision: int = 3) -> str:
 
 
 def print_results(
-    memory_gb: list[float], forward_ms: list[float], backward_ms: list[float]
+    memory_gb: list[float], forward_ms: list[float], backward_ms: list[float], inference: bool = False
 ) -> None:
-    total_ms = [f + b for f, b in zip(forward_ms, backward_ms)]
     rows = [
-        ("Peak memory per full step (GB)", format_mean_std(memory_gb, 3)),
+        (
+            "Peak memory per forward step (GB)" if inference else "Peak memory per full step (GB)",
+            format_mean_std(memory_gb, 3),
+        ),
         ("Forward time per step (ms)", format_mean_std(forward_ms, 3)),
-        ("Backward time per step (ms)", format_mean_std(backward_ms, 3)),
-        ("Total time per step (ms)", format_mean_std(total_ms, 3)),
     ]
+    if not inference:
+        total_ms = [f + b for f, b in zip(forward_ms, backward_ms)]
+        rows.extend(
+            [
+                ("Backward time per step (ms)", format_mean_std(backward_ms, 3)),
+                ("Total time per step (ms)", format_mean_std(total_ms, 3)),
+            ]
+        )
     metric_width = max(len("Metric"), *(len(i[0]) for i in rows))
     value_width = max(len("Mean +/- std dev"), *(len(i[1]) for i in rows))
     separator = f"+-{'-' * metric_width}-+-{'-' * value_width}-+"
@@ -251,6 +262,8 @@ def benchmark(
     num_warmup: int,
     num_repeats: int,
     compile_model: bool,
+    dataset: int,
+    inference: bool = False,
 ) -> None:
     if not torch.cuda.is_available():
         raise RuntimeError(
@@ -269,7 +282,7 @@ def benchmark(
     device = torch.device("cuda", 0)
     torch.cuda.set_device(device)
 
-    plans_file = resolve_plans_file(plans_arg, configuration)
+    plans_file = resolve_plans_file(plans_arg, dataset)
     plans_manager = PlansManager(plans_file)
     configuration_manager = plans_manager.get_configuration(configuration)
     configuration_manager.validate_required_for_training(configuration)
@@ -280,12 +293,13 @@ def benchmark(
         plans_manager, configuration_manager, dataset_json
     )
     num_output_channels = label_manager.num_segmentation_heads
-    enable_deep_supervision = configuration_manager.trainer.get(
+    enable_deep_supervision = not inference and configuration_manager.trainer.get(
         "enable_deep_supervision", True
     )
 
     print(f"Plans file: {plans_file}")
     print(f"Configuration: {configuration}")
+    print(f"Mode: {'inference' if inference else 'training'}")
     print(
         f"Input shape: {[configuration_manager.batch_size, num_input_channels, *configuration_manager.patch_size]}"
     )
@@ -301,11 +315,10 @@ def benchmark(
             num_output_channels,
             enable_deep_supervision,
         ).to(device)
-        network.train()
-        network = torch.compile(network, dynamic=False, mode="reduce-overhead", disable=not compile_model)
-        loss_fn = build_dice_ce_loss(
-            configuration_manager, plans_manager, dataset_json, enable_deep_supervision
-        ).to(device)
+        network.train(not inference)
+        network = torch.compile(
+            network, dynamic=False, mode="reduce-overhead", disable=not compile_model
+        )
 
         data = torch.randn(
             (
@@ -316,28 +329,33 @@ def benchmark(
             device=device,
             dtype=torch.float32,
         )
-        with torch.no_grad(), autocast("cuda", enabled=True):
-            sample_output = network(data)
-        target = make_targets_like(sample_output, num_output_channels, device)
-        del sample_output
+        loss_fn, target, grad_scaler = None, None, None
+        if not inference:
+            loss_fn = build_dice_ce_loss(
+                configuration_manager, plans_manager, dataset_json, enable_deep_supervision
+            ).to(device)
+            with torch.no_grad(), autocast("cuda", enabled=True):
+                sample_output = network(data)
+            target = make_targets_like(sample_output, num_output_channels, device)
+            del sample_output
 
-        grad_scaler = (
-            GradScaler("cuda") if not TORCH_HAS_OLD_GRADSCALER else GradScaler()
-        )
+            grad_scaler = (
+                GradScaler("cuda") if not TORCH_HAS_OLD_GRADSCALER else GradScaler()
+            )
 
         for _ in range(num_warmup):
-            run_step(network, loss_fn, data, target, grad_scaler, measure=False)
+            run_step(network, loss_fn, data, target, grad_scaler, measure=False, inference=inference)
 
         memory_gb, forward_ms, backward_ms = [], [], []
         for _ in range(num_repeats):
             memory, forward, backward = run_step(
-                network, loss_fn, data, target, grad_scaler, measure=True
+                network, loss_fn, data, target, grad_scaler, measure=True, inference=inference
             )
             memory_gb.append(memory)
             forward_ms.append(forward)
             backward_ms.append(backward)
 
-        print_results(memory_gb, forward_ms, backward_ms)
+        print_results(memory_gb, forward_ms, backward_ms, inference=inference)
     except BaseException as error:
         if _is_oom_error(error):
             _clear_cuda_after_oom()
@@ -350,15 +368,28 @@ def benchmark(
 
 def benchmark_entry() -> None:
     parser = argparse.ArgumentParser(
-        description="Benchmark CUDA memory and forward/backward time for an nnU-Net v2 configuration."
+        description="Benchmark CUDA memory and training or inference time for an nnU-Net v2 configuration."
+    )
+    parser.add_argument(
+        "-d",
+        "--dataset",
+        type=int,
+        required=True,
+        help="Dataset ID used to locate plans under nnUNet_preprocessed.",
     )
     parser.add_argument(
         "-p",
         "--plan",
         type=str,
         default="MobileUNetPlans",
-        help="Plans identifier to discover under nnUNet_preprocessed, or a direct path to a plans JSON file. "
+        help="Plans identifier in the selected dataset's preprocessed directory, or a direct path to a plans JSON file. "
         "Default: MobileUNetPlans",
+    )
+    parser.add_argument(
+        "-i",
+        "--inference",
+        action="store_true",
+        help="Measure forward passes in eval mode with torch.inference_mode, without loss or backward passes.",
     )
     parser.add_argument(
         "-c",
@@ -396,6 +427,8 @@ def benchmark_entry() -> None:
             args.num_warmup,
             args.num_repeats,
             not args.disable_compilation,
+            dataset=args.dataset,
+            inference=args.inference,
         )
     except BenchmarkOOM as error:
         print(f"ERROR: {error}", file=sys.stderr)
