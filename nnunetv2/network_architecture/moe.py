@@ -265,8 +265,16 @@ class MoEConvNd(nn.Module):
     def _forward_naive(self, x: torch.Tensor, scores: torch.Tensor):
         conv_op = [F.conv1d, F.conv2d, F.conv3d][self.N - 1]
 
-        weight = self.weight.flatten(0, 1)
-        bias = self.bias.flatten(0, 1) if self.bias is not None else None
+        if self.groups == 1:
+            weight = self.weight.flatten(0, 1)
+            bias = self.bias.flatten(0, 1) if self.bias is not None else None
+        else:
+            # Each group's expert filters must be contiguous for grouped conv.
+            weight = self.weight.unflatten(1, [self.groups, -1]).transpose(0, 1).flatten(0, 2)
+            bias = (
+                self.bias.unflatten(1, [self.groups, -1]).transpose(0, 1).flatten()
+                if self.bias is not None else None
+            )
 
         x = conv_op(
             input=x,
@@ -277,9 +285,12 @@ class MoEConvNd(nn.Module):
             groups=self.groups,
         )
 
-        # x.shape: [B, E * C_o, ...] -> [B, C_o, ...]
-        x = x.unflatten(1, [self.num_experts, -1])
-        x = torch.einsum("beo..., be -> bo...", x, scores)
+        if self.groups == 1:
+            x = x.unflatten(1, [self.num_experts, -1])
+            x = torch.einsum("beo..., be -> bo...", x, scores)
+        else:
+            x = x.unflatten(1, [self.groups, self.num_experts, -1])
+            x = torch.einsum("bgeo..., be -> bgo...", x, scores).flatten(1, 2)
 
         return x
 
