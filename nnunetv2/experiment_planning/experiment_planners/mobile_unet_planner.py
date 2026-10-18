@@ -507,21 +507,22 @@ class BenchmarkPlanner(MobileUNetPlanner):
 
         strides = (2, 4)
         scales = ("S", "M", "L")
+        n_epochs = (250, 500, 1000)
 
-        for stride, scale in product(strides, scales):
-            if stride == 2: 
+        for stride, scale, n_epoch in product(strides, scales, n_epochs):
+            if stride == 2:
                 psm = self.PATCH_SIZE_MULTIPLIER_2X
             else:
                 psm = self.PATCH_SIZE_MULTIPLIER_4X
-                
-            new_configs[f"MN-{stride}x-{scale}_Static"] = {
+
+            new_configs[f"MN-{stride}x-{scale}_Static_EP{n_epoch}"] = {
                 "inherits_from": [f"MN-{stride}x-{scale}"],
                 "patch_size_multiplier": psm,
-                "trainer": {"num_epochs": 1000},
+                "trainer": {"num_epochs": n_epoch},
             }
 
-            new_configs[f"MN-{stride}x-{scale}_Dynamic"] = {
-                "inherits_from": [f"MN-{stride}x-{scale}_Static"],
+            new_configs[f"MN-{stride}x-{scale}_Dynamic_EP{n_epoch}"] = {
+                "inherits_from": [f"MN-{stride}x-{scale}_Static_EP{n_epoch}"],
                 "architecture": {
                     "arch_kwargs": {
                         f"encoder_moe_configs": [
