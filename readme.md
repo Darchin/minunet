@@ -96,12 +96,6 @@ uv run benchmark -d 1 -p MinuNetPlans -c MN-4x-M --inference
 
 These measurements use dummy tensors with the configuration's patch size and batch size. They measure model execution, not full-volume inference or end-to-end training time. See the [benchmark guide](documentation/how-to/run-benchmarks.md) for details. `uv run batch_train --help` describes the GPU scheduler; `uv run report_results --help` describes result reporting.
 
-## Existing research runs
-
-The architecture is `nnunetv2.network_architecture.minunet.MinuNet`, the planner is `MinuNetPlanner`, and current plans use `MinuNetPlans`. The `MN-*` configuration names and model parameter keys are unchanged.
-
-To update earlier research runs, use the [one-time migration utility](documentation/how-to/migrate-minunet-results.md). It backs up and verifies the selected artifacts before updating their paths, plans, and checkpoint metadata. Archived results are excluded.
-
 ## Development and documentation
 
 ```bash
