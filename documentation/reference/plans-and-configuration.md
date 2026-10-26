@@ -70,8 +70,8 @@ You generally do not need to rerun preprocessing for training-only changes such 
 ### Compose an architecture configuration and a training recipe
 
 ```json
-"mn-2x-t-recipe": {
-  "inherits_from": ["mn-2x", "mobile-training-recipe"],
+"MN-2x-custom-recipe": {
+  "inherits_from": ["MN-2x", "minunet-training-recipe"],
   "patch_size_multiplier": 6,
   "architecture": {
     "arch_kwargs": {

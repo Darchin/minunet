@@ -7,8 +7,8 @@ This guide covers the custom CUDA benchmark tool and the built-in nnU-Net benchm
 Use the custom `benchmark` command to measure a configuration without loading training data:
 
 ```bash
-uv run benchmark -d 1 -p MobileUNetPlans -c mn-2x-t
-uv run benchmark -d 1 -p MobileUNetPlans -c mn-2x-t --inference
+uv run benchmark -d 1 -p MinuNetPlans -c MN-4x-M_Static_EP1000
+uv run benchmark -d 1 -p MinuNetPlans -c MN-4x-M_Static_EP1000 --inference
 ```
 
 The integer dataset ID (`-d`/`--dataset`) is required. Plan identifiers resolve within that

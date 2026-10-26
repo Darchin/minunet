@@ -836,9 +836,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-p",
         "--plan",
-        default="MobileUNetPlans",
+        default="MinuNetPlans",
         help="Plans identifier under nnUNet_preprocessed/<dataset>, or a direct plans JSON path. "
-        "Default: MobileUNetPlans",
+        "Default: MinuNetPlans",
     )
     parser.add_argument("--configs", nargs="+", help="Configuration names.")
     parser.add_argument(

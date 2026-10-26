@@ -1,13 +1,16 @@
 [project]
-name = "nnunetv2-study"
+name = "minunet"
 version = "2.8.1"
 requires-python = ">=3.12"
-description = "Research fork of the nnU-Net medical image segmentation framework."
+description = "MinuNet: efficient volumetric medical image segmentation, built on nnU-Net v2."
 readme = "readme.md"
 license = { file = "LICENSE" }
 authors = [
-    { name = "Fabian Isensee", email = "f.isensee@dkfz-heidelberg.de" },
-    { name = "Helmholtz Imaging Applied Computer Vision Lab" },
+    { name = "Mehdi Rejali", email = "mehdirejali@aut.ac.ir" },
+    { name = "Maryam Jabbari", email = "maryamjabbari@aut.ac.ir" },
+    { name = "Mohammad Moein Firouzi", email = "moein.firouzi@aut.ac.ir" },
+    { name = "Mohammad Reza Ketabi Delshad", email = "rezaketabi@aut.ac.ir" },
+    { name = "Fatemeh Shakeri", email = "f.shakeri@aut.ac.ir" },
 ]
 maintainers = [{ name = "Mehdi Rejali", email = "mehdi.rejali.2001@gmail.com" }]
 classifiers = [
@@ -29,6 +32,7 @@ keywords = [
     'medical image segmentation',
     'nnU-Net',
     'nnunet',
+    'MinuNet',
 ]
 dependencies = [
     "acvl-utils>=0.2.6,<0.3",                    # 0.3 may bring breaking changes. Careful!
@@ -61,7 +65,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/Darchin/nnunet-study"
+Repository = "https://github.com/Darchin/minunet"
 Upstream = "https://github.com/MIC-DKFZ/nnUNet"
 
 [project.scripts]
@@ -102,7 +106,7 @@ explicit = true
 torch = { index = "pytorch-cu130" }
 
 [project.optional-dependencies]
-dev = ["pre-commit"]
+dev = ["pre-commit", "pytest"]
 
 [tool.setuptools.packages.find]
 include = ["nnunetv2*"]

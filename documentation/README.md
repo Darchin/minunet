@@ -1,5 +1,8 @@
 # Documentation
 
+For MinuNet installation, planning, training, and inference, start with the [project README](../readme.md).
+The guides below also include inherited nnU-Net documentation, which may describe upstream defaults and command names.
+
 The nnU-Net documentation is being reorganized into clearer entry points.
 
 Start here:

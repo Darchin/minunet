@@ -381,9 +381,9 @@ def benchmark_entry() -> None:
         "-p",
         "--plan",
         type=str,
-        default="MobileUNetPlans",
+        default="MinuNetPlans",
         help="Plans identifier in the selected dataset's preprocessed directory, or a direct path to a plans JSON file. "
-        "Default: MobileUNetPlans",
+        "Default: MinuNetPlans",
     )
     parser.add_argument(
         "-i",
