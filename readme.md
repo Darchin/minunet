@@ -98,9 +98,9 @@ These measurements use dummy tensors with the configuration's patch size and bat
 
 ## Existing research runs
 
-The architecture is now `nnunetv2.network_architecture.minunet.MinuNet`, and the planner is `MinuNetPlanner`. Legacy `mobile_unet` and `mobile_unet_planner` imports remain available so saved plans can still resolve their classes. The `MN-*` configuration names and model parameter keys are unchanged.
+The architecture is `nnunetv2.network_architecture.minunet.MinuNet`, the planner is `MinuNetPlanner`, and current plans use `MinuNetPlans`. The `MN-*` configuration names and model parameter keys are unchanged.
 
-New plans default to `MinuNetPlans`. For an existing run saved under `MobileUNetPlans`, pass `-p MobileUNetPlans` to training, prediction, benchmarking, or batch training. This selects the existing plans and results directories.
+To update earlier research runs, use the [one-time migration utility](documentation/how-to/migrate-minunet-results.md). It backs up and verifies the selected artifacts before updating their paths, plans, and checkpoint metadata. Archived results are excluded.
 
 ## Development and documentation
 
