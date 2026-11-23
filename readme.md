@@ -96,6 +96,21 @@ uv run benchmark -d 1 -p MinuNetPlans -c MN-4x-M --inference
 
 These measurements use dummy tensors with the configuration's patch size and batch size. They measure model execution, not full-volume inference or end-to-end training time. See the [benchmark guide](documentation/how-to/run-benchmarks.md) for details. `uv run batch_train --help` describes the GPU scheduler; `uv run report_results --help` describes result reporting.
 
+## Convert saved validation summaries to upstream nnU-Net scoring
+
+The manuscript reports scores using the upstream nnU-Net convention. The validation summaries archived on Zenodo contain the original MinuNet scores. Use the converter below to reproduce the manuscript scores from those summaries.
+
+MinuNet gives Dice and IoU of 1.0 when both the reference and predicted masks for a target are empty. Upstream nnU-Net records `NaN` and skips those pairs when averaging cases for that target. To apply the upstream convention to archived summaries, run either command from the repository root with Python:
+
+```bash
+python -m nnunetv2.evaluation.convert_summary path/to/summary.json path/to/summary_upstream.json
+python -m nnunetv2.evaluation.convert_summary path/to/nnUNet_results path/to/nnUNet_results_upstream
+```
+
+After installation, the same utility is available as `convert_summary`. It uses the per-case voxel counts in each summary, so images, masks, and checkpoints are unnecessary. The directory form copies every `summary.json` into the same relative path under the output directory. Both forms write new files and refuse to overwrite existing files.
+
+The converter recalculates per-target and foreground Dice and IoU for each summary. For five-fold results, give each converted fold equal weight. If a target has no defined scores in a fold, its mean and the fold's foreground mean are `NaN`, as in upstream nnU-Net.
+
 ## Development and documentation
 
 ```bash

@@ -91,6 +91,7 @@ export_model_to_zip = "nnunetv2.model_sharing.entry_points:export_pretrained_mod
 move_plans_between_datasets = "nnunetv2.experiment_planning.plans_for_pretraining.move_plans_between_datasets:entry_point_move_plans_between_datasets"
 evaluate_folder = "nnunetv2.evaluation.evaluate_predictions:evaluate_folder_entry_point"
 evaluate_simple = "nnunetv2.evaluation.evaluate_predictions:evaluate_simple_entry_point"
+convert_summary = "nnunetv2.evaluation.convert_summary:main"
 convert_MSD_dataset = "nnunetv2.dataset_conversion.convert_MSD_dataset:entry_point"
 preprocess_like_nnssl = "nnunetv2.experiment_planning.like_nnssl:preprocess_like_nnssl_entrypoint"
 plan_like_dynamic = "nnunetv2.experiment_planning.like_nnssl:plan_like_dynamic_entrypoint"
